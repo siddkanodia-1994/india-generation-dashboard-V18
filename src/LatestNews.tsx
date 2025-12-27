@@ -9,7 +9,7 @@ type NewsItem = {
   snippet: string;
 };
 
-const CACHE_KEY = "latestNews_cache_v1";
+const CACHE_KEY = "latestNews_cache_v2";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 const DEFAULT_FROM = "2021-01-01";
@@ -62,36 +62,6 @@ function isRelevant(item: NewsItem) {
   return mentionsIndia && mentionsPower;
 }
 
-function getEnvNewsApiKey(): string | null {
-  // Supports different build setups without breaking compilation
-  // - Vite: import.meta.env.VITE_NEWS_API_KEY or import.meta.env.NEWS_API_KEY
-  // - CRA: process.env.REACT_APP_NEWS_API_KEY
-  // - Next: process.env.NEXT_PUBLIC_NEWS_API_KEY
-  try {
-    const im: any = (import.meta as any);
-    const key1 = im?.env?.NEWS_API_KEY;
-    const key2 = im?.env?.VITE_NEWS_API_KEY;
-    if (typeof key1 === "string" && key1.trim()) return key1.trim();
-    if (typeof key2 === "string" && key2.trim()) return key2.trim();
-  } catch {
-    // ignore
-  }
-
-  try {
-    // eslint-disable-next-line no-undef
-    const p: any = typeof process !== "undefined" ? (process as any) : null;
-    const k =
-      p?.env?.NEWS_API_KEY ||
-      p?.env?.REACT_APP_NEWS_API_KEY ||
-      p?.env?.NEXT_PUBLIC_NEWS_API_KEY;
-    if (typeof k === "string" && k.trim()) return k.trim();
-  } catch {
-    // ignore
-  }
-
-  return null;
-}
-
 function loadCache(): { ts: number; items: NewsItem[] } | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
@@ -113,64 +83,16 @@ function saveCache(items: NewsItem[]) {
   }
 }
 
-async function fetchViaNewsAPI(fromISO: string, toISO: string): Promise<NewsItem[]> {
-  const apiKey = getEnvNewsApiKey();
-  if (!apiKey) throw new Error("NEWS_API_KEY missing");
-
-  // Query using OR keywords + India emphasis
-  const q = [
-    `"India"`,
-    `("power sector" OR electricity OR "power demand" OR "power supply" OR "peak demand" OR grid OR discom OR transmission OR "renewable energy")`,
-  ].join(" AND ");
-
-  const url = new URL("https://newsapi.org/v2/everything");
-  url.searchParams.set("q", q);
-  url.searchParams.set("from", fromISO);
-  url.searchParams.set("to", toISO);
-  url.searchParams.set("language", "en");
-  url.searchParams.set("sortBy", "publishedAt");
-  url.searchParams.set("pageSize", "100");
-  url.searchParams.set("apiKey", apiKey);
-
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`NewsAPI HTTP ${res.status}`);
-  const json = await res.json();
-
-  const articles = Array.isArray(json?.articles) ? json.articles : [];
-  const items: NewsItem[] = articles
-    .map((a: any, idx: number) => {
-      const title = String(a?.title || "").trim();
-      const url = String(a?.url || "").trim();
-      const source = String(a?.source?.name || "Unknown").trim();
-      const publishedAtISO = String(a?.publishedAt || "").trim();
-      const snippet = String(a?.description || a?.content || "").trim();
-
-      if (!title || !url || !publishedAtISO) return null;
-
-      return {
-        id: `newsapi_${publishedAtISO}_${idx}`,
-        title,
-        url,
-        source,
-        publishedAtISO,
-        snippet: clampText(snippet, 200),
-      } as NewsItem;
-    })
-    .filter(Boolean) as NewsItem[];
-
-  return items;
-}
-
 async function fetchViaGoogleNewsRSS(): Promise<NewsItem[]> {
-  // Google News RSS query
-  // We fetch RSS through Jina AI proxy to avoid CORS issues in the browser.
+  // Google News RSS query focused on Indian power sector
   const rssUrl =
     "https://news.google.com/rss/search?q=" +
     encodeURIComponent(
-      `(India power sector OR India electricity OR India power demand OR India power supply OR India peak demand OR India renewable energy OR India grid)`
+      `(India power sector OR India electricity OR India power demand OR India power supply OR India peak demand OR India renewable energy OR India grid OR India discom OR India transmission)`
     ) +
     "&hl=en-IN&gl=IN&ceid=IN:en";
 
+  // Use Jina AI proxy to avoid CORS in browser
   const proxyUrl = `https://r.jina.ai/http://` + rssUrl.replace(/^https?:\/\//, "");
 
   const res = await fetch(proxyUrl);
@@ -243,7 +165,7 @@ export default function LatestNews() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Filter controls
+  // ✅ Keep filter state as ISO (YYYY-MM-DD) so <input type="date"> works
   const [from, setFrom] = useState(DEFAULT_FROM);
   const [to, setTo] = useState(todayISODate());
 
@@ -276,23 +198,12 @@ export default function LatestNews() {
         }
       }
 
-      const fromISO = DEFAULT_FROM;
-      const toISO = todayISODate();
-
-      let fetched: NewsItem[] = [];
-
-      // Primary: NewsAPI
-      try {
-        fetched = await fetchViaNewsAPI(fromISO, toISO);
-      } catch {
-        // Fallback: RSS
-        fetched = await fetchViaGoogleNewsRSS();
-      }
+      const fetched = await fetchViaGoogleNewsRSS();
 
       // Post-filter relevance
       const relevant = fetched.filter(isRelevant);
 
-      // Limit 100 max (and ensure newest first)
+      // Sort newest first and cap at 100
       relevant.sort((a, b) => (a.publishedAtISO < b.publishedAtISO ? 1 : -1));
       const limited = relevant.slice(0, 100);
 
@@ -306,7 +217,7 @@ export default function LatestNews() {
   }
 
   useEffect(() => {
-    // Fetch fresh data on tab load (but cache 1 hr)
+    // Fetch on tab load (use 1hr cache)
     loadNews(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -433,9 +344,8 @@ export default function LatestNews() {
           </div>
         </div>
 
-        {/* Note on caching (kept minimal, no UI restructure elsewhere) */}
         <div className="mt-6 text-xs text-slate-500">
-          Cached for up to 1 hour to reduce API calls. Refresh to fetch latest.
+          Cached for up to 1 hour to reduce calls. Refresh to fetch latest.
         </div>
       </div>
     </div>
