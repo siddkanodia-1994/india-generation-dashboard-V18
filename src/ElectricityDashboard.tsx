@@ -563,8 +563,9 @@ export default function ElectricityDashboard(props: ElectricityDashboardProps) {
   } = props;
 
   const STORAGE_KEY = `tusk_india_${type}_v1`;
-  const isSumTab = calcMode === "sum"; // Generation/Demand/Supply
-  const isAvgTab = calcMode === "avg"; // Coal PLF / RTM / Peak Demand Met
+  const isSumTab = calcMode === "sum";
+  const isAvgTab = calcMode === "avg";
+  const isPeakDemandTab = type === "demand"; // ✅ Peak Demand Met tab identifier
 
   const fmtValue = (x: number | null | undefined) => {
     if (x == null || Number.isNaN(x)) return "—";
@@ -625,25 +626,34 @@ export default function ElectricityDashboard(props: ElectricityDashboardProps) {
   const [aggFreq, setAggFreq] = useState<ViewAs>("rolling30_avg");
 
   /* =========================================================
-     ✅ DEFAULT TOGGLE STATES (per tab type) — REQUIRED CHANGE
-     - SUM tabs: YoY% only ON, control lines ON, all else OFF
-     - AVG tabs: AVG current ON, control lines ON, all else OFF
+     ✅ DEFAULT TOGGLE STATES
+     Requirement:
+     - Peak Demand Met tab (type === "demand"): YoY% only ON + control lines ON
+       (AVG Current OFF by default for this tab)
+     - Other SUM tabs: YoY% only ON + control lines ON
+     - Other AVG tabs: AVG Current ON + control lines ON
   ========================================================= */
 
   const [showUnitsSeries, setShowUnitsSeries] = useState<boolean>(() => {
-    // AVG tabs: "AVG current" ON by default
+    // Peak Demand Met: YoY% only by default => totals OFF
+    if (isPeakDemandTab) return false;
+
+    // Other AVG tabs: "AVG current" ON by default
     // SUM tabs: totals OFF by default (YoY% only)
     return isAvgTab;
   });
 
   const [showPrevYearSeries, setShowPrevYearSeries] = useState<boolean>(() => {
-    // always OFF by default for all tabs (per requirement)
+    // always OFF by default for all tabs
     return false;
   });
 
   const [showYoYSeries, setShowYoYSeries] = useState<boolean>(() => {
-    // SUM tabs: YoY ON by default
-    // AVG tabs: YoY OFF by default
+    // Peak Demand Met: YoY ON by default
+    if (isPeakDemandTab) return true;
+
+    // Other SUM tabs: YoY ON by default
+    // Other AVG tabs: YoY OFF by default
     return isSumTab;
   });
 
@@ -653,7 +663,7 @@ export default function ElectricityDashboard(props: ElectricityDashboardProps) {
   });
 
   const [showControlLines, setShowControlLines] = useState<boolean>(() => {
-    // always ON by default (both cases)
+    // always ON by default
     return true;
   });
 
@@ -663,22 +673,33 @@ export default function ElectricityDashboard(props: ElectricityDashboardProps) {
 
   // Ensure defaults apply on open/reload AND remain correct if component ever re-mounts
   useEffect(() => {
-    // On mount (tab open/reload):
-    // SUM tabs -> YoY only + control lines ON
-    // AVG tabs -> AVG current + control lines ON
+    // Peak Demand Met tab: YoY% only + control lines ON
+    if (isPeakDemandTab) {
+      setShowUnitsSeries(false);
+      setShowPrevYearSeries(false);
+      setShowYoYSeries(true);
+      setShowMoMSeries(false);
+      setShowControlLines(true);
+      return;
+    }
+
+    // Other SUM tabs -> YoY only + control lines ON
     if (isSumTab) {
       setShowUnitsSeries(false);
       setShowPrevYearSeries(false);
       setShowYoYSeries(true);
       setShowMoMSeries(false);
       setShowControlLines(true);
-    } else {
-      setShowUnitsSeries(true);
-      setShowPrevYearSeries(false);
-      setShowYoYSeries(false);
-      setShowMoMSeries(false);
-      setShowControlLines(true);
+      return;
     }
+
+    // Other AVG tabs -> AVG current + control lines ON
+    setShowUnitsSeries(true);
+    setShowPrevYearSeries(false);
+    setShowYoYSeries(false);
+    setShowMoMSeries(false);
+    setShowControlLines(true);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once per tab instance
 
@@ -1022,7 +1043,7 @@ export default function ElectricityDashboard(props: ElectricityDashboardProps) {
     }));
   }, [monthlyAgg]);
 
-  // ✅ Peak Demand Met footer requirement: average of 24 monthly values (only for this tab)
+  // ✅ Peak Demand Met requirement: average of 24 monthly values (only for this tab)
   const monthlyFooterAvgForPeakDemand = useMemo(() => {
     if (type !== "demand") return null;
     if (calcMode !== "avg") return null;
@@ -1554,7 +1575,9 @@ export default function ElectricityDashboard(props: ElectricityDashboardProps) {
                           const labelCurr =
                             calcMode === "avg" && aggFreq !== "daily" ? `${periodValueLabel} Current` : "Total Current";
                           const labelPY =
-                            calcMode === "avg" && aggFreq !== "daily" ? `${periodValueLabel} (previous year)` : "Total (previous year)";
+                            calcMode === "avg" && aggFreq !== "daily"
+                              ? `${periodValueLabel} (previous year)`
+                              : "Total (previous year)";
 
                           if (key === "units") return [fmtValue(num ?? null), labelCurr];
                           if (key === "prev_year_units") return [fmtValue(num ?? null), labelPY];
@@ -1610,7 +1633,7 @@ export default function ElectricityDashboard(props: ElectricityDashboardProps) {
                           <Line yAxisId="right" type="monotone" dataKey="__mean_yoy" name="Mean (YoY%)" dot={false} strokeWidth={2} stroke="#000000" connectNulls />
                           <Line yAxisId="right" type="monotone" dataKey="__p1_yoy" name="+1σ (YoY%)" dot={false} strokeWidth={2} stroke="#2563eb" strokeDasharray="6 4" connectNulls />
                           <Line yAxisId="right" type="monotone" dataKey="__p2_yoy" name="+2σ (YoY%)" dot={false} strokeWidth={2} stroke="#4f46e5" strokeDasharray="6 4" connectNulls />
-                          <Line yAxisId="right" type="monotone" dataKey="__m1_yoy" name="-1σ (YoY%)" dot={false} strokeWidth={2} strokeWidth={2} stroke="#f97316" strokeDasharray="6 4" connectNulls />
+                          <Line yAxisId="right" type="monotone" dataKey="__m1_yoy" name="-1σ (YoY%)" dot={false} strokeWidth={2} stroke="#f97316" strokeDasharray="6 4" connectNulls />
                           <Line yAxisId="right" type="monotone" dataKey="__m2_yoy" name="-2σ (YoY%)" dot={false} strokeWidth={2} stroke="#eab308" strokeDasharray="6 4" connectNulls />
                         </>
                       ) : null}
@@ -1876,7 +1899,6 @@ export default function ElectricityDashboard(props: ElectricityDashboardProps) {
                   <option value="monthly">Monthly</option>
                 </select>
 
-                {/* keep existing dropdown behavior (if you had it) */}
                 <select
                   value={tablePeriod}
                   onChange={(e) => setTablePeriod(e.target.value as any)}
