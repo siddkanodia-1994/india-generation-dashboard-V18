@@ -1,5 +1,3 @@
-// src/App.tsx
-
 import React from "react";
 import { Tabs, TabList, Tab, TabPanel } from "react-tabs";
 import "react-tabs/style/react-tabs.css";
@@ -27,32 +25,30 @@ export default function App() {
             </TabList>
           </div>
 
-          {/* =======================
-              GENERATION (Sub-tabs)
-              ======================= */}
+          {/* ===========================
+              Generation (NOW WITH SUB-TABS)
+              =========================== */}
           <TabPanel>
-            {/* Sub-tabs ONLY: Thermal + Renewable (no repeated "Generation") */}
+            {/* Sub-tabs inside Generation tab (same react-tabs styling) */}
             <Tabs>
               <div className="mt-2">
                 <TabList>
-                  {/* Renamed Coal -> Thermal (label only) */}
-                  <Tab>Thermal</Tab>
+                  <Tab>Generation</Tab>
+                  <Tab>Coal</Tab>
                   <Tab>Renewable</Tab>
                 </TabList>
               </div>
 
-              {/* THERMAL (was Coal) */}
+              {/* Generation = total */}
               <TabPanel>
                 <ElectricityDashboard
-                  type="generation-thermal"
+                  type="generation"
                   title="India Electricity Generation Dashboard"
                   subtitle="Daily generation data, trends, and YoY/MoM analytics"
-                  seriesLabel="Coal"
+                  seriesLabel="Generation"
                   unitLabel="MU"
-                  // IMPORTANT: uses the same CSV path as before (no file/data changes)
+                  valueColumnKey="total"
                   defaultCsvPath="/data/generation.csv"
-                  // If your CSV uses a different column name for thermal/coal, change ONLY this key.
-                  valueColumnKey="coal_gwh"
                   enableAutoFetch={true}
                   calcMode="sum"
                   valueDisplay={{
@@ -62,7 +58,26 @@ export default function App() {
                 />
               </TabPanel>
 
-              {/* RENEWABLE */}
+              {/* Coal = coal */}
+              <TabPanel>
+                <ElectricityDashboard
+                  type="generation-coal"
+                  title="India Electricity Generation Dashboard"
+                  subtitle="Daily generation data, trends, and YoY/MoM analytics"
+                  seriesLabel="Coal"
+                  unitLabel="MU"
+                  valueColumnKey="coal"
+                  defaultCsvPath="/data/generation.csv"
+                  enableAutoFetch={false}
+                  calcMode="sum"
+                  valueDisplay={{
+                    suffix: " MU",
+                    decimals: 2,
+                  }}
+                />
+              </TabPanel>
+
+              {/* Renewable = renewable */}
               <TabPanel>
                 <ElectricityDashboard
                   type="generation-renewable"
@@ -70,11 +85,9 @@ export default function App() {
                   subtitle="Daily generation data, trends, and YoY/MoM analytics"
                   seriesLabel="Renewable"
                   unitLabel="MU"
-                  // IMPORTANT: uses the same CSV path as before (no file/data changes)
+                  valueColumnKey="renewable"
                   defaultCsvPath="/data/generation.csv"
-                  // If your CSV uses a different column name for renewables, change ONLY this key.
-                  valueColumnKey="renewable_gwh"
-                  enableAutoFetch={true}
+                  enableAutoFetch={false}
                   calcMode="sum"
                   valueDisplay={{
                     suffix: " MU",
@@ -85,7 +98,9 @@ export default function App() {
             </Tabs>
           </TabPanel>
 
-          {/* PEAK DEMAND MET */}
+          {/* ===========================
+              Peak Demand Met
+              =========================== */}
           <TabPanel>
             <ElectricityDashboard
               type="demand"
@@ -104,7 +119,9 @@ export default function App() {
             />
           </TabPanel>
 
-          {/* SUPPLY */}
+          {/* ===========================
+              Supply
+              =========================== */}
           <TabPanel>
             <ElectricityDashboard
               type="supply"
@@ -123,7 +140,9 @@ export default function App() {
             />
           </TabPanel>
 
-          {/* COAL PLF */}
+          {/* ===========================
+              Coal PLF
+              =========================== */}
           <TabPanel>
             <ElectricityDashboard
               type="coal-plf"
@@ -142,7 +161,9 @@ export default function App() {
             />
           </TabPanel>
 
-          {/* RTM PRICES */}
+          {/* ===========================
+              RTM Prices
+              =========================== */}
           <TabPanel>
             <ElectricityDashboard
               type="rtm-prices"
@@ -161,17 +182,23 @@ export default function App() {
             />
           </TabPanel>
 
-          {/* RATED CAPACITY */}
+          {/* ===========================
+              Rated Capacity
+              =========================== */}
           <TabPanel>
             <RatedCapacity />
           </TabPanel>
 
-          {/* LATEST NEWS */}
+          {/* ===========================
+              Latest News
+              =========================== */}
           <TabPanel>
             <LatestNews />
           </TabPanel>
 
-          {/* LATEST REPORTS */}
+          {/* ===========================
+              Latest Reports
+              =========================== */}
           <TabPanel>
             <LatestReports />
           </TabPanel>
